@@ -38,7 +38,7 @@ class CourseHomeView(APIView):
             topic_output = {
                 'topic_name': topic.name,
                 'topic_code': topic.code,
-                'featured_coureses': courses_serializer.data,
+                'featured_courses': courses_serializer.data,
                 'topic_image': topic.image.url
             }
 
@@ -166,7 +166,7 @@ class GetCartDetail(APIView):
         courses=[]
 
         for uuid in body.get("cart"):
-            item = Course.objects.filter(course_uuid=uuid)
+            item = Course.objects.filter(code=uuid)
 
             if not item:
                 return HttpResponseBadRequest()

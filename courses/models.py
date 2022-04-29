@@ -34,7 +34,7 @@ class Topic(models.Model):
         db_table = 'topic'
 
     def get_absolute_url(self):
-        return 'http://localhost:8000'+self.image_url.url
+        return self.image_url.url
 
 
 class Course(models.Model):
@@ -83,6 +83,9 @@ class Course(models.Model):
                 length += episode.length
 
         return get_timer(length, type='short')
+
+    def get_absolute_url(self):
+        return self.image_url.url
 
 
 class Section(models.Model):

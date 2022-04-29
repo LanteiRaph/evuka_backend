@@ -52,7 +52,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser,PermissionsMixin):
     name=models.CharField(max_length=225,null=True,blank=True)
     email=models.EmailField(max_length=225,unique=True)
-    paid_course=models.ManyToManyField(Course,blank=True)
+    paid_courses=models.ManyToManyField(Course,blank=True)
     created=models.DateTimeField(auto_now_add=True)
 
     is_active=models.BooleanField(default=True)
