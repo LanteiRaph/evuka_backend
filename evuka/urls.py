@@ -9,6 +9,7 @@ urlpatterns = [
     path('courses/',include('courses.urls',namespace='courses')),
     path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.jwt')),
+    path('payments/', include('payments.urls')),
 ]
 
 if settings.DEBUG:

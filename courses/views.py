@@ -8,7 +8,6 @@ from django.core.exceptions import ValidationError
 from django.db.models.query_utils import Q
 from django.http.response import HttpResponseBadRequest, HttpResponseNotAllowed
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from .models import Topic, Course
 from .serializers import (
@@ -19,6 +18,7 @@ from .serializers import (
     CommentSerializer,
     CartItemSerializer
 )# Create your views here.
+from rest_framework.permissions import IsAuthenticated
 
 
 class CourseHomeView(APIView):
@@ -89,9 +89,8 @@ class CourseSearch(APIView):
 
 class CourseStudy(APIView):
     #Get curerent logged in user.
-    # permission_classes=[IsAuthenticated]
 
-
+    permission_classes=[IsAuthenticated]
     def get(self,request,course_uuid):
         #Get the courses matching the given id.
         check_course=Course.objects.filter(code=course_uuid)
@@ -99,6 +98,7 @@ class CourseStudy(APIView):
         if not check_course:
             #rreturn bad responce.
             return HttpResponseBadRequest('Course does not exist')
+        
         #Course found Get the course for the current user
         user_course=request.user.paid_courses.filter(code=course_uuid)
         #If not founf
@@ -185,3 +185,4 @@ class GetCartDetail(APIView):
 
 
         return Response(data={"cart_detail":serializer.data,"cart_total":str(cart_cost)})
+

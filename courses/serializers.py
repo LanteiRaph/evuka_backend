@@ -17,7 +17,7 @@ class EpisodePaidSerializer(ModelSerializer):
 
 class CourseSectionPaidSerializer(ModelSerializer):
     episodes=EpisodePaidSerializer(many=True)
-    total_length=serializers.CharField(source='total_length')
+    # total_length=serializers.CharField(source='total_length')
     class Meta:
         model=Section
         fields=[
@@ -100,16 +100,16 @@ class CoursePaidSerializer(ModelSerializer):
 
     comment=CommentSerializer(many=True)
     author=UserSerializer()
-    course_sections=CourseSectionPaidSerializer(many=True)
+    sections=CourseSectionPaidSerializer(many=True)
     # student_rating=serializers.IntegerField(source='get_rating')
     # student_rating_no=serializers.IntegerField(source='get_no_rating')
     enrolled_students=serializers.IntegerField(source='get_enrolled_students')
     total_lectures=serializers.IntegerField(source="get_total_lectures")
-    total_length=serializers.CharField(source='get_total_length')
+    # total_length=serializers.CharField(source='get_total_length')
     class Meta:
         model=Course
         exclude=[
-            'courses',
+            'course',
         ]
 class CourseListSerializer(ModelSerializer):
     # rating=serializers.IntegerField(source='get_rating')

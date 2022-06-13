@@ -70,8 +70,8 @@ class User(AbstractBaseUser,PermissionsMixin):
 
     def get_all_courses(self):
         courses=[]
-        for course in self.paid_course.all():
-            courses.append(course.course_uuid)
+        for course in self.paid_courses.all():
+            courses.append(course.code)
 
         return courses
 

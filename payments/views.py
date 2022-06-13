@@ -1,126 +1,129 @@
-from django.core.exceptions import ValidationError
-from payments.models import Payment, PaymentIntent
-import stripe
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from django.conf import settings
-from courses.models import Course
+from urllib import response
+import requests
+from requests.auth import HTTPBasicAuth
 import json
-from decimal import Decimal
+from rest_framework.response import Response
+from django.core.exceptions import ValidationError
+from django.db.models.query_utils import Q
+from django.http.response import HttpResponseBadRequest, HttpResponseNotAllowed
+from rest_framework.views import APIView
+from rest_framework import status
+from . mpesa_credentials import MpesaAccessToken, LipanaMpesaPassword
+from django.views.decorators.csrf import csrf_exempt
+from .models import MpesaPayment, PaypalPayments
+
+#get the access token, secured access to access safaricomms api for payaments.
+class getAccessToken(APIView):
+    #Returns an access token from safaricom.
+    def get(self, request):
+        consumer_key = 'yaRJg4mqUCVk8irj79FPsCTXc12Hj9Tu'
+        consumer_secret = '7GXwGcqK08SBIpBh'
+        api_URL = 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+
+        r = requests.get(api_URL, auth=HTTPBasicAuth(
+            consumer_key, consumer_secret))
+        mpesa_access_token = json.loads(r.text)
+        validated_mpesa_access_token = mpesa_access_token['access_token']
+
+        return Response({"access_token": validated_mpesa_access_token})
+
+#Make online payment, push sdk to user form confrimation
+class lipa_na_mpesa_online(APIView):
+    def sdkPush(self, phoneNumber):
+        MpesaAccessToken_ = MpesaAccessToken()
+        access_token = MpesaAccessToken_.getAccessToken()
+        print(access_token)
+        api_url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer iAjOMQg3zv6sU5uOLrtmAZPk8wFg'
+        }
+        request = {
+            "BusinessShortCode": LipanaMpesaPassword.Business_short_code,
+            "Password": LipanaMpesaPassword.decode_password,
+            "Timestamp": LipanaMpesaPassword.lipa_time,
+            "TransactionType": "CustomerPayBillOnline",
+            "Amount": 1,
+            "PartyA": phoneNumber,  # replace with your phone number to get stk push
+            "PartyB": LipanaMpesaPassword.Business_short_code,
+            "PhoneNumber": phoneNumber,  # replace with your phone number to get stk push
+            "CallBackURL": "https://sandbox.safaricom.co.ke/mpesa/",
+            "AccountReference": "Evuka e-Education",
+            "TransactionDesc": "Testing stk push"
+        }
+        response = requests.post(api_url, json=request, headers=headers)
+        return json.loads(response.text)
+
+    def get(self, request):
+        response = self.sdkPush(254111850032)
+        return Response(json.loads(response.text))
+
+    def post(self, request):
+        payload = json.loads(request.body)
+        #extract the body of the 
+        phoneNumber = payload.phoneNumber
+        #make the request to safaricom server to push sdk.
+        response = self.sdkPush(int(phoneNumber))
+        #respnd back to the user 
+        return Response(response)
+
+class RegisterUrls(APIView):
+    def get(request):
+        access_token = MpesaAccessToken.validated_mpesa_access_token
+        api_url = "https://sandbox.safaricom.co.ke/mpesa/c2b/v1/registerurl"
+        headers = {"Authorization": "Bearer %s" % access_token}
+        options = {"ShortCode": LipanaMpesaPassword.Business_short_code,
+                "ResponseType": "Completed",
+                "ConfirmationURL": "http://127.0.0.1:8000/payments/confirmation",
+                "ValidationURL": "http://127.0.0.1:8000/api/payments/validation"}
+        response = requests.post(api_url, json=options, headers=headers)
+        return Response(response.text)
 
 
-stripe.api_key=settings.STRIPE_SECRET_KEY
-endpoint_secret=settings.WEBHOOK_SECRET
-
-class PaymentHandler(APIView):
-
-    def post(self,request):
-
-        if request.body:
-            body=json.loads(request.body)
-            if body and len(body):
-                # fetch course detail as line_items
-                courses_line_items=[]
-                cart_course=[]
-                for item in body:
-                    try:
-                        course=Course.objects.get(course_uuid=item)
-
-                        line_item={
-                            'price_data': {
-                            'currency': 'usd',
-                            'unit_amount': int(course.price*100),
-                            'product_data': {
-                                'name': course.title,
-
-                            },
-                        },
-                            'quantity': 1,
-                        }
-
-                        courses_line_items.append(line_item)
-                        cart_course.append(course)
-
-                    except Course.DoesNotExist:
-                        pass
-                    except ValidationError:
-                        pass
-
-            else:
-                return Response(status=400)
-        else:
-                return Response(status=400)
+def call_back(request):
+    pass
 
 
-        checkout_session = stripe.checkout.Session.create(
-                payment_method_types=['card'],
-                line_items=courses_line_items,
-                mode='payment',
-                success_url='http://localhost:3000/',
-                cancel_url="http://localhost:3000/",
+def validation(request):
+    context = {
+        "ResultCode": 0,
+        "ResultDesc": "Accepted"
+    }
+    return Response(dict(context))
 
-            )
-
-
-        intent=PaymentIntent.objects.create(
-            payment_intent_id=checkout_session.payment_intent,
-            checkout_id=checkout_session.id,
-            user=request.user,
+class mpesa_confirmation(APIView):
+    def post(request):
+        mpesa_body = request.body.decode('utf-8')
+        mpesa_payment = json.loads(mpesa_body)
+        payment = MpesaPayment(
+            first_name=mpesa_payment['FirstName'],
+            last_name=mpesa_payment['LastName'],
+            middle_name=mpesa_payment['MiddleName'],
+            description=mpesa_payment['TransID'],
+            phone_number=mpesa_payment['MSISDN'],
+            amount=mpesa_payment['TransAmount'],
+            reference=mpesa_payment['BillRefNumber'],
+            organization_balance=mpesa_payment['OrgAccountBalance'],
+            type=mpesa_payment['TransactionType'],
         )
-
-        for course in cart_course:
-            intent.courses.add(course)
-
-
-        return Response({"url":checkout_session.url})
-
-
-
-class Webhook(APIView):
-
-    def post(self,request,*args, **kwargs):
-        payload = request.body
-        sig_header = request.META['HTTP_STRIPE_SIGNATURE']
-        event = None
-
-        try:
-            event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-            )
-        except ValueError as e:
-            # Invalid payload
-            return Response(status=400)
-        except stripe.error.SignatureVerificationError as e:
-            # Invalid signature
-            return Response(status=400)
+        payment.save()
+        context = {
+            "ResultCode": 0,
+            "ResultDesc": "Accepted"
+        }
+        return Response(dict(context))
 
 
-        if event['type'] == 'checkout.session.completed':
-            session = event['data']['object']
 
-            try:
-                # fetch user intent
-                intent=PaymentIntent.objects.get(
-                    payment_intent_id=session.payment_intent,
-                    checkout_id=session.id
 
-                )
-            except PaymentIntent.DoesNotExist:
-                return Response(status=400)
+#  orderId= models.CharField(max_length=60)
+#     user = models.ForeignKey(User, on_delete=models.CASCADE)
+#     courses = models.ManyToManyField(Course)
+#     amount= models.DecimalField(max_digits=10, decimal_places=2)
+class PaypalConfrim(APIView):
+    def post(self, request):
+        payload = json.loads(request.body)
+        #create the payment record 
+        payment = PaypalPayments(orderId=payload.orderId)
 
-            # create payment reciept
-            Payment.objects.create(
-                payment_intent=intent,
-                total_amount= Decimal(session.amount_total)/100,
-            )
-
-            for course in intent.courses.all():
-            # TODO add course to user profile
-                intent.user.paid_course.add(course)
-
-    # Fulfill the purchase...
-    # fulfill_order(session)
-
-  # Passed signature verification
-        return Response(status=200)
-
+        
